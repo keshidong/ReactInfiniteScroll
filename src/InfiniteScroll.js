@@ -1,7 +1,6 @@
 import React, { Component } from 'react';
 import PropTypes from 'prop-types';
 import cx from 'classnames';
-import './style.less';
 
 class InfiniteScroll extends Component {
     // scrollGap = 400
@@ -148,6 +147,7 @@ InfiniteScroll.propTypes = {
     initScrollGap: PropTypes.number,
     onHitScrollBottom: PropTypes.func,
     maxStartLimit: PropTypes.number,
+    children: PropTypes.func,
 };
 
 InfiniteScroll.defaultProps = {
@@ -156,6 +156,7 @@ InfiniteScroll.defaultProps = {
     initScrollGap: 240,
     onHitScrollBottom: () => {},
     maxStartLimit: 0,
+    children: () => {},
 };
 
 export default InfiniteScroll;

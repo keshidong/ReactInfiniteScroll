@@ -1,9 +1,12 @@
-import React, { Component } from 'react'
-import InfiniteScroll from '../src/InfiniteScroll'
+import React, { Component } from 'react';
+import InfiniteScroll from '../src/InfiniteScroll';
+import ChatItem from './ChatItem';
+import fakeFetch from './fakeFetch';
 
 class App extends Component {
     state = {
-        list: []
+        list: [],
+        hasMore: true,
     }
 
     handleLoadMore = () => {
@@ -12,13 +15,31 @@ class App extends Component {
         })
     }
 
+    componentDidMount() {
+        fakeFetch(30)
+            .then((data) => {
+                const { hasMore, list } = data;
+                this.setState({
+                    list,
+                    hasMore,
+                });
+            });
+    }
+
     render() {
         return (
-            <InfiniteScroll
-                onHonHitScrollBottom={this.handleLoadMore}
+            <div
             >
+                {
+                    this.state.list.map(item => (
+                        <ChatItem
+                            key={item.id}
+                            {...item}>
 
-            </InfiniteScroll>
+                        </ChatItem>
+                    ))
+                }
+            </div>
         )
     }
 }
