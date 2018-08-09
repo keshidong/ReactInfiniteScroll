@@ -1,162 +1,115 @@
 import React, { Component } from 'react';
 import PropTypes from 'prop-types';
-import cx from 'classnames';
+
 
 class InfiniteScroll extends Component {
-    // scrollGap = 400
-    lastScrollTop = 0
-
-    lastRuntimeScrollTop = 0
-
-    scrollDeta = 100
-    // visibleItemTotal = 20
-    // untilLeftoverItemTotal = 5
-
-    scrollGap = this.props.initScrollGap // 触发
-
-    scrollDownGap = this.props.initScrollGap // 触发
-    scrollUpGap = this.props.initScrollGap // 触发
+    // cache calculated items, not all items
+    items_ = {};
+    RUNWAY_ITEMS = 20;
+    RUNWAY_ITEMS_OPPOSITE = 10;
 
     state = {
-        start: 0,
-        maxStartLimit: this.props.maxStartLimit,
-    }
-
-    static getDerivedStateFromProps(props, state) {
-        if (props.maxStartLimit > state.maxStartLimit) {
-            return {
-                start: state.start + 1,
-                maxStartLimit: props.maxStartLimit,
-            }
-        }
-        return null;
+        anchorItem: { index: 0, offset: 0 },
+        ifScrollUp: false,
     }
 
     handleScroll = () => {
-        const curScrollTop = this.scrollContainer.scrollTop;
-        const el = this.scrollContainer;
+        var delta = this.scroller_.scrollTop - this.anchorScrollTop;
+        let anchorItem;
+        // Special case, if we get to very top, always scroll to top.
+        if (this.scroller_.scrollTop === 0) {
+            anchorItem = { index: 0, offset: 0 };
+            // this.setState({
+            //     anchorItem: { index: 0, offset: 0 },
+            // })
+        } else {
+            anchorItem = this.calculateAnchoredItem(this.state.anchorItem, delta);
+        }
+        this.anchorScrollTop = this.scroller_.scrollTop;
+        const lastScreenItem = this.calculateAnchoredItem(anchorItem, this.scroller_.offsetHeight);
 
-        // 往下滚动
-        // if (this.ifInfinite && curScrollTop - this.lastScrollTop > this.scrollGap) {
-        if (curScrollTop - this.lastScrollTop > this.scrollDownGap
-            || (el.scrollHeight - curScrollTop) < (el.clientHeight + this.scrollDownGap)) {
-            // 滚动到底部，且list不够的时
+        // 判断last Screen item 是否为接近最后的item
+        const ifScrollUp = delta < 0;
 
-            console.log(this.state);
-            if (this.state.maxStartLimit <= this.state.start) {
-                // if (curScrollTop > this.lastScrollTop
-                // && (el.scrollHeight - curScrollTop) < (el.clientHeight + this.scrollDeta)) {
-                this.props.onHitScrollBottom();
-                return;
+        // update view
+        this.setState({
+            ifScrollUp,
+            anchorItem,
+        });
+            // this.fill(this.anchorItem.index - RUNWAY_ITEMS, lastScreenItem.index + RUNWAY_ITEMS_OPPOSITE);
+            // this.fill(this.anchorItem.index - RUNWAY_ITEMS_OPPOSITE, lastScreenItem.index + RUNWAY_ITEMS);
+
+    }
+    calculateAnchoredItem = (initialAnchor, delta) => {
+        const { maxItemCount } = this.props;
+
+        if (delta === 0)
+            return initialAnchor;
+
+        delta += initialAnchor.offset;
+        let i = initialAnchor.index;
+
+        if (delta < 0) {
+            while (delta < 0 && i > 0 && this.getItemHeight(i - 1)) {
+                delta += this.getItemHeight(i - 1);
+                i--;
+            }
+        } else {
+            while (delta > 0 && i < maxItemCount && this.getItemHeight(i) && this.getItemHeight(i) < delta) {
+                delta -= this.getItemHeight(i);
+                i++;
+            }
+            if (i >= maxItemCount || !this.getItemHeight(i)) {
+                // todo
+                // load more data
             }
 
-            // 计算即将要删除的第一个item的高度
-            const startItemClientHeight = this.scrollContainer.children[0].clientHeight;
+        }
+        return {
+            index: i,
+            offset: delta,
+        };
+    }
 
-            // 更新 start = start + 1
+    getItemHeight = (i) => {
+        const { anchorItem } = this.state;
 
-            // lock infinite
-            // this.ifInfinite = false;
-
-            this.setState({
-                // 在render函数内del第一个item, add后一个item
-                start: this.state.start + 1,
-            }, () => {
-                const nextScrollTop = curScrollTop - startItemClientHeight;
-
-                // 更新lastScrollTop值
-                this.scrollContainer.scrollTop = nextScrollTop;
-                this.lastScrollTop = nextScrollTop;
-
-                // 更新srcollGap
-                this.scrollDownGap = this.scrollContainer.lastElementChild.clientHeight;
-
-                // unlock infinite
-                // this.ifInfinite = true;
-            });
+        if (this.items_[i].height) {
+            return item[i].height;
         }
 
-        // 往上滚动
-        if ((this.lastScrollTop - curScrollTop > this.scrollUpGap) || curScrollTop < this.scrollUpGap) {
-            // 如果已经start为0
-            if (this.state.start <= 0) {
-                return;
-            }
-
-            // 更新 start
-
-            // lock infinite
-            // this.ifInfinite = false;
-
-            this.setState({
-                start: this.state.start - 1,
-            }, () => {
-                // 计算已经加入的第一个item的高度
-                const startItemClientHeight = this.scrollContainer.children[0].clientHeight;
-
-                const nextScrollTop = curScrollTop + startItemClientHeight;
-
-                // 更新lastScrollTop值
-                this.scrollContainer.scrollTop = nextScrollTop;
-                this.lastScrollTop = nextScrollTop;
-
-                // 更新srcollGap
-                this.scrollUpGap = startItemClientHeight;
-                // unlock infinite
-                // this.ifInfinite = true;
-            });
-
+        if (anchorItem.index - this.RUNWAY_ITEMS + i < 0) {
+            throw new Error('getItemHeight params index must greater or equal to 0');
         }
+
+        const itemHeight = this.scroller_[anchorItem.index - this.RUNWAY_ITEMS + i].offsetHeight;
+        // cache height
+        this.items_[i].height = itemHeight;
+        return itemHeight;
     }
     render() {
-        const clsPrefix = 'c-InfiniteScrollContainer';
-        const cls = cx(clsPrefix, {
-            [this.props.className]: true,
-        });
         return (
             <div
-                className={cls}
-                style={{
-                    position: 'relative',
-                    ...this.props.style,
-                }}
+                onScroll={this.handleScroll}
+                ref={(dom) => { this.scroller_ = dom; }}
             >
-                <div
-                    className={`${clsPrefix}--scroller`}
-                    style={{
-                        position: 'absolute',
-                        height: '100%',
-                        width: '100%',
-                        overflowY: 'auto',
-                    }}
-                    ref={(dom) => { this.scrollContainer = dom; }}
-                    onScroll={this.handleScroll}
-                >
-                    {
-                        this.props.children(this.state.start)
-                    }
-                </div>
+                {this.props.children(this.state.anchorItem.index)}
             </div>
         );
     }
 }
 
 InfiniteScroll.propTypes = {
-    className: PropTypes.string,
-    style: PropTypes.shape({}),
-    initScrollGap: PropTypes.number,
-    onHitScrollBottom: PropTypes.func,
-    maxStartLimit: PropTypes.number,
+    maxItemCount: PropTypes.number,
+    onLoadMore: PropTypes.func,
     children: PropTypes.func,
+    style: PropTypes.shape({}),
 };
-
 InfiniteScroll.defaultProps = {
-    className: '',
-    style: {},
-    initScrollGap: 240,
-    onHitScrollBottom: () => {},
-    maxStartLimit: 0,
+    maxItemCount: 0,
+    onLoadMore: () => {},
     children: () => {},
+    style: {},
 };
 
 export default InfiniteScroll;
