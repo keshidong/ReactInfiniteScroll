@@ -4,16 +4,21 @@ import PropTypes from 'prop-types';
 
 class InfiniteScroll extends Component {
     // cache calculated items, not all items
-    items_ = {};
+    itemsHeightCache_ = [];
     RUNWAY_ITEMS = 20;
     RUNWAY_ITEMS_OPPOSITE = 10;
 
     state = {
+        start: 0,
+        end: this.RUNWAY_ITEMS,
+
+        // 放在state主要是用于之后的数据视图恢复
         anchorItem: { index: 0, offset: 0 },
-        ifScrollUp: false,
     }
 
     handleScroll = () => {
+        const { maxItemCount } = this.props;
+
         var delta = this.scroller_.scrollTop - this.anchorScrollTop;
         let anchorItem;
         // Special case, if we get to very top, always scroll to top.
@@ -31,10 +36,21 @@ class InfiniteScroll extends Component {
         // 判断last Screen item 是否为接近最后的item
         const ifScrollUp = delta < 0;
 
+        console.log(ifScrollUp);
+        if (!ifScrollUp && lastScreenItem.index + this.RUNWAY_ITEMS >= maxItemCount) {
+            this.props.onLoadMore();
+        }
+
         // update view
         this.setState({
-            ifScrollUp,
             anchorItem,
+
+            start: ifScrollUp
+                ? Math.max(anchorItem.index - this.RUNWAY_ITEMS, 0)
+                : Math.max(anchorItem.index - this.RUNWAY_ITEMS_OPPOSITE, 0),
+            end: ifScrollUp
+                ? Math.min(lastScreenItem.index + this.RUNWAY_ITEMS_OPPOSITE, maxItemCount)
+                : Math.min(lastScreenItem.index + this.RUNWAY_ITEMS, maxItemCount)
         });
             // this.fill(this.anchorItem.index - RUNWAY_ITEMS, lastScreenItem.index + RUNWAY_ITEMS_OPPOSITE);
             // this.fill(this.anchorItem.index - RUNWAY_ITEMS_OPPOSITE, lastScreenItem.index + RUNWAY_ITEMS);
@@ -72,28 +88,52 @@ class InfiniteScroll extends Component {
     }
 
     getItemHeight = (i) => {
-        const { anchorItem } = this.state;
+        const { start, end } = this.state;
 
-        if (this.items_[i].height) {
-            return item[i].height;
+        if (this.itemsHeightCache_[i]) {
+            return this.itemsHeightCache_[i];
         }
 
-        if (anchorItem.index - this.RUNWAY_ITEMS + i < 0) {
-            throw new Error('getItemHeight params index must greater or equal to 0');
+        if (i >= start && i <= end) {
+            // 节点在渲染状态
+            console.log(i, start, end);
+            const itemHeight = this.scroller_.children[i - start].offsetHeight;
+            // cache height
+            this.itemsHeightCache_[i] = itemHeight;
+            return itemHeight;
         }
+        
+        console.log(i, start, end);
 
-        const itemHeight = this.scroller_[anchorItem.index - this.RUNWAY_ITEMS + i].offsetHeight;
-        // cache height
-        this.items_[i].height = itemHeight;
-        return itemHeight;
+        throw new Error('节点即没有被缓存过，也不在渲染状态');
+    }
+
+    calculateCacheItemHeight = () => {
+        // cache list height
+        const { start } = this.state;
+        this.scroller_.children.forEach((item, index) => {
+            // todo 可能重复计算
+            this.itemsHeightCache_[index + start] = item.offsetHeight;
+        });
+    }
+
+    componentDidMount() {
+        this.calculateCacheItemHeight();
+    }
+    componentDidUpdate() {
+        this.calculateCacheItemHeight();
     }
     render() {
+        const { start, end } = this.state;
         return (
             <div
+                style={this.props.style}
                 onScroll={this.handleScroll}
                 ref={(dom) => { this.scroller_ = dom; }}
             >
-                {this.props.children(this.state.anchorItem.index)}
+                {
+                    this.props.children(start, end)
+                }
             </div>
         );
     }
